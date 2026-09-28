@@ -37,6 +37,11 @@ export default defineAssets({
     type: AssetType.UIKitML,
     name: 'Scene Panel',
   },
+  'dj-panel': {
+    url: publicAssetUrl('ui/dj-panel.uikitml'),
+    type: AssetType.UIKitML,
+    name: 'DJ Panel',
+  },
   'welcome-panel': {
     url: publicAssetUrl('ui/welcome.uikitml'),
     type: AssetType.UIKitML,

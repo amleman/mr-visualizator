@@ -19,8 +19,18 @@ inmersivo desde paneles espaciales.
 - **Detección de beat** — el golpe de bombo dispara un destello y un pulso radial.
 - **Color arcoíris rotatorio** — el tono viene de altura + tiempo; el audio nunca
   toca el tono, solo saturación y brillo.
-- **Dos paneles espaciales** (UIKitML) — reproducción y sensibilidad en uno,
-  tamaño de esfera y modo de inmersión en el otro.
+- **Tornamesa DJ y LaunchPad** (`dj-panel.uikitml`) — jog wheel de Scratch de vinilo,
+  LaunchPad de 6 sonidos (Kick 808, Snare, Hi-Hat, Clap, Bass Drop, Laser), mini teclado
+  melódico de 8 notas (Do a Do') y botón de ritmo automático (Auto Beat a 120 BPM).
+- **Radio Web en directo 24/7** — streaming continuo de estaciones de radio (SomaFM
+  Vaporwaves, Groove Salad y DEF CON Radio) mediante proxy local seguro contra 403 y CORS.
+- **Síntesis procedural Web Audio** (`src/synth-engine.ts`) — cero archivos externos ni descargas:
+  todos los instrumentos y efectos de la tornamesa se generan matemáticamente con latencia <5 ms.
+- **Doble visualización adaptativa (XR vs PC / Celular)**:
+  - **En PC / Móvil**: los paneles 3D del mundo se ocultan; se despliega una interfaz 2D responsive
+    táctil y de ratón (`DeviceUI`) con pestañas y un panel de atajos de teclado en la esquina inferior izquierda.
+  - **En VR (Meta Quest)**: paneles espaciales 3D activos en el entorno; el panel de escena se acopla a
+    la muñeca/mando derecho y se despliega con el botón físico **"B"** del control.
 - **Esfera agarrable** — grab por proximidad con el botón *grip*.
 - **Passthrough ↔ VR** — cambio de session mode en caliente.
 
@@ -47,7 +57,7 @@ npm install
 npm run dev:runtime
 ```
 
-El servidor queda en `https://localhost:8081/` — **HTTPS es obligatorio**, WebXR
+El servidor queda en `https://localhost:8082/` — **HTTPS es obligatorio**, WebXR
 solo funciona en un secure context. El certificado es autofirmado, así que el
 navegador va a advertir la primera vez.
 
@@ -61,42 +71,68 @@ navegador va a advertir la primera vez.
 **Por Wi-Fi** — el visor y la PC en la misma red:
 
 1. Averiguá la IP local de la PC (`ipconfig` en Windows, `ifconfig` en macOS/Linux).
-2. En el navegador del Quest, entrá a `https://TU_IP:8081/` (con `https://`).
+2. En el navegador del Quest, entrá a `https://TU_IP:8082/` (con `https://`).
 3. Aceptá la advertencia de certificado: **Advanced → Proceed**.
 4. Tocá **Enter XR**.
 
 Si no carga, lo más probable es el firewall. En Windows, como administrador:
 
 ```powershell
-New-NetFirewallRule -DisplayName "IWSDK dev 8081" -Direction Inbound -LocalPort 8081 -Protocol TCP -Action Allow
+New-NetFirewallRule -DisplayName "IWSDK dev 8082" -Direction Inbound -LocalPort 8082 -Protocol TCP -Action Allow
 ```
 
 **Por USB** — más confiable, y evita el problema de redes con aislamiento de
 clientes:
 
 ```bash
-adb reverse tcp:8081 tcp:8081
+adb reverse tcp:8082 tcp:8082
 ```
 
-Después entrá a `https://localhost:8081/` desde el visor. Como bonus, esa URL
+Después entrá a `https://localhost:8082/` desde el visor. Como bonus, esa URL
 coincide con el nombre del certificado.
 
 ## Controles
 
+### En Realidad Virtual (Meta Quest)
+
 | Acción | Entrada |
 |---|---|
-| Botones y sliders de los paneles | **Gatillo** (raycast) |
+| Botones y sliders de los paneles 3D | **Gatillo** (raycast) |
 | Agarrar y mover la esfera | **Grip** (proximidad — acercá la mano) |
+| Mostrar / Ocultar panel de escena en la muñeca | **Botón B** (mando derecho) |
 
 La esfera **no** es `RayInteractable` a propósito: si lo fuera, se comería el
 rayo del gatillo antes de que llegara a los paneles.
+
+### En PC (Teclado físico)
+
+| Tecla | Acción |
+|---|---|
+| **Barra Espaciadora** | Bombo (Kick 808 sub-grave) |
+| **C** | Caja (Snare) |
+| **X** | Platillo (Hi-Hat) |
+| **V** | Scratch de vinilo |
+| **Z** | Aplauso (Clap) |
+| **D** | Caída de bajo (Bass Drop) |
+| **L** | Efecto Láser |
+| **1 al 8** | Notas de piano (Do a Do' / C4 a C5) |
+| **R** | Encender / Pausar Radio Web |
+| **A** | Activar / Detener Auto Beat (120 BPM) |
+| **B** | Alternar menú de escena |
 
 ## Cómo funciona la audio-reactividad
 
 ### El grafo de audio
 
 ```
-HTMLAudioElement → MediaElementAudioSourceNode → AnalyserNode → destination
+[ Pistas MP3 locales ] ──> MediaElementSourceNode ──┐
+[ Radio Web Stream ]   ──> MediaElementSourceNode ──┼─> AnalyserNode ──> destination
+[ SynthEngine (DJ) ]   ──> GainNode / Oscillators ──┘         │
+                                                              ▼
+                                                  sample() Uint8Array[96]
+                                                              │
+                                                              ▼
+                                                  PointCloudSystem (CPU -> GPU)
 ```
 
 `fftSize: 512` da 256 bins hasta ~24 kHz, pero **solo se usan los primeros 96**
@@ -164,21 +200,27 @@ golpe y se leería como ruido de color en vez de música.
 
 ```
 iwsdk.config.json                        Autoridad del proyecto: escena, assets, features XR
+proyecto.md                              Resumen ejecutivo y no técnico para web / portafolio
+screenshots/                             Capturas de pantalla para vista previa web
 src/
   index.ts                               World.create() + registro de sistemas
   assets.ts                              defineAssets() — catálogo compartido runtime/editor
   components.ts                          defineComponents() — catálogo de componentes ECS
   point-cloud-component.ts               Componente PointCloud (sensitivity, scale)
   point-cloud.ts                         PointCloudSystem — análisis de audio y beat
-  audio-analyser.ts                      Web Audio: reproducción, playlist, AnalyserNode
-  panel.ts                               PanelSystem — sesión XR y selector de modo
+  audio-analyser.ts                      Web Audio: reproducción, playlist, radio web y analyser
+  synth-engine.ts                        Síntesis procedural Web Audio (Scratch, LaunchPad, Piano)
+  device-ui.ts                           Interfaz 2D responsive adaptada a PC y móviles táctiles
+  dj-system.ts                           DJSystem — interactividad de tornamesa y atajos
+  panel.ts                               PanelSystem — sesión XR, selector de modo y doble visualización
   scene-assets/
     point-cloud.scene-asset.ts           Geometría y shaders de la nube
 public/
   scenes/main.iwsdk.scene.json           Composición: qué nodos, dónde, con qué componentes
-  ui/welcome.uikitml                     Panel de audio
-  ui/scene-panel.uikitml                 Panel de escena
-  audio/music/                           Pistas
+  ui/welcome.uikitml                     Panel de pistas y sensibilidad
+  ui/dj-panel.uikitml                    Panel de la Tornamesa DJ y radio web
+  ui/scene-panel.uikitml                 Panel de escena (flotante en muñeca en VR)
+  audio/music/                           Pistas locales opcionales
 ```
 
 Convención de IWSDK: **la geometría estática vive en TypeScript, la composición

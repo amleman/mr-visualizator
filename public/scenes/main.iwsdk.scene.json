@@ -112,11 +112,11 @@
       "components": {}
     },
     {
-      "id": "scene-panel",
-      "name": "Scene Panel",
+      "id": "dj-panel",
+      "name": "DJ Panel",
       "content": {
         "type": "asset",
-        "asset": "scene-panel"
+        "asset": "dj-panel"
       },
       "transform": {
         "position": [
@@ -130,6 +130,30 @@
           0
         ],
         "scale": 0.15
+      },
+      "components": {
+        "RayInteractable": {}
+      }
+    },
+    {
+      "id": "scene-panel",
+      "name": "Scene Panel",
+      "content": {
+        "type": "asset",
+        "asset": "scene-panel"
+      },
+      "transform": {
+        "position": [
+          0,
+          -10,
+          0
+        ],
+        "rotationDeg": [
+          0,
+          0,
+          0
+        ],
+        "scale": 0.08
       },
       "components": {
         "RayInteractable": {}

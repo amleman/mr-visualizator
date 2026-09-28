@@ -19,7 +19,7 @@ import {
   Points,
   ShaderMaterial,
 } from '@iwsdk/core';
-import { MusicAnalyser, USED_BINS } from './audio-analyser.js';
+import { getSharedAnalyser, MusicAnalyser, USED_BINS } from './audio-analyser.js';
 import { PointCloud } from './point-cloud-component.js';
 
 export class PointCloudSystem extends createSystem({
@@ -56,7 +56,7 @@ export class PointCloudSystem extends createSystem({
   private trackPosEl: any = null;
 
   init(): void {
-    this.analyser = new MusicAnalyser();
+    this.analyser = getSharedAnalyser();
 
     // 'qualify' solo dispara para entidades que califican DESPUES de suscribirse.
     // Los systems se registran en el .then() de World.create(), o sea con la
