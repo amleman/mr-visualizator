@@ -1,0 +1,163 @@
+{
+  "version": "iwsdk.scene.v1",
+  "units": "meters",
+  "components": {
+    "com.iwsdk.components.IBLGradient": {
+      "sky": [
+        0.6902,
+        0.749,
+        0.7843,
+        1
+      ],
+      "equator": [
+        0.6584,
+        0.7084,
+        0.7913,
+        1
+      ],
+      "ground": [
+        0.807,
+        0.7758,
+        0.7454,
+        1
+      ],
+      "intensity": 1
+    }
+  },
+  "resources": {},
+  "nodes": [
+    {
+      "id": "point-cloud",
+      "name": "Point Cloud",
+      "metadata": {
+        "iwsdk.validation": {
+          "allowFloating": true
+        }
+      },
+      "content": {
+        "type": "asset",
+        "asset": "point-cloud"
+      },
+      "transform": {
+        "position": [
+          0,
+          1.05,
+          -1.15
+        ]
+      },
+      "components": {
+        "PointCloud": {
+          "sensitivity": 1.2,
+          "scale": 1
+        },
+        "OneHandGrabbable": {
+          "rotate": false,
+          "translate": true
+        }
+      }
+    },
+    {
+      "id": "welcome-panel",
+      "name": "Welcome Panel",
+      "content": {
+        "type": "asset",
+        "asset": "welcome-panel"
+      },
+      "transform": {
+        "position": [
+          -0.9,
+          1.15,
+          -1.25
+        ],
+        "rotationDeg": [
+          0,
+          27,
+          0
+        ],
+        "scale": 0.15
+      },
+      "components": {
+        "RayInteractable": {}
+      }
+    },
+    {
+      "id": "webxr-banner",
+      "name": "WebXR Banner",
+      "metadata": {
+        "iwsdk.validation": {
+          "allowFloating": true
+        }
+      },
+      "content": {
+        "type": "asset",
+        "asset": "webxr-banner"
+      },
+      "transform": {
+        "position": [
+          0,
+          1,
+          1.8
+        ],
+        "rotationDeg": [
+          0,
+          180,
+          0
+        ],
+        "scale": [
+          1,
+          -1,
+          1
+        ]
+      },
+      "components": {}
+    },
+    {
+      "id": "dj-panel",
+      "name": "DJ Panel",
+      "content": {
+        "type": "asset",
+        "asset": "dj-panel"
+      },
+      "transform": {
+        "position": [
+          0.9,
+          1.15,
+          -1.25
+        ],
+        "rotationDeg": [
+          0,
+          -27,
+          0
+        ],
+        "scale": 0.15
+      },
+      "components": {
+        "RayInteractable": {}
+      }
+    },
+    {
+      "id": "scene-panel",
+      "name": "Scene Panel",
+      "content": {
+        "type": "asset",
+        "asset": "scene-panel"
+      },
+      "transform": {
+        "position": [
+          0,
+          -10,
+          0
+        ],
+        "rotationDeg": [
+          0,
+          0,
+          0
+        ],
+        "scale": 0.08
+      },
+      "components": {
+        "RayInteractable": {}
+      }
+    }
+  ]
+}
