@@ -21,34 +21,35 @@ export const TRACKS = [
 export interface RadioStation {
   name: string;
   genre: string;
+  mount: string;
   url: string;
 }
 
-export const DIRECT_RADIO_STREAMS: Record<string, string> = {
-  vaporwaves: 'https://ice2.somafm.com/vaporwaves-128-mp3',
-  groovesalad: 'https://ice2.somafm.com/groovesalad-128-mp3',
-  defcon: 'https://ice2.somafm.com/defcon-128-mp3',
-};
-
-// En desarrollo local (vite dev) se usa el proxy local (/api/radio/...) para evitar bloqueos por host local.
-// En producción estática (GitHub Pages) se usan directamente los streams HTTPS de SomaFM con CORS habilitado (*).
-const isDev = import.meta.env.DEV;
+/** Servidores espejo oficiales de SomaFM con soporte CORS (*) */
+export const RADIO_SERVERS = [
+  'https://ice2.somafm.com',
+  'https://ice1.somafm.com',
+  'https://ice6.somafm.com',
+];
 
 export const RADIO_STATIONS: RadioStation[] = [
   {
     name: 'Vaporwaves',
     genre: 'Synthwave / Retro',
-    url: isDev ? '/api/radio/vaporwaves' : DIRECT_RADIO_STREAMS.vaporwaves,
+    mount: 'vaporwaves-128-mp3',
+    url: 'https://ice2.somafm.com/vaporwaves-128-mp3',
   },
   {
     name: 'Groove Salad',
     genre: 'Ambient / Lo-Fi',
-    url: isDev ? '/api/radio/groovesalad' : DIRECT_RADIO_STREAMS.groovesalad,
+    mount: 'groovesalad-128-mp3',
+    url: 'https://ice2.somafm.com/groovesalad-128-mp3',
   },
   {
     name: 'DEF CON Radio',
     genre: 'Electronic / Beats',
-    url: isDev ? '/api/radio/defcon' : DIRECT_RADIO_STREAMS.defcon,
+    mount: 'defcon-128-mp3',
+    url: 'https://ice2.somafm.com/defcon-128-mp3',
   },
 ];
 
@@ -80,38 +81,42 @@ export class MusicAnalyser {
   private trackIndex = 0;
   private radioIndex = 0;
   private currentLoadedRadioIndex = -1;
+  private serverIndex = 0;
 
   constructor() {
     this.element = new Audio();
     this.element.loop = true;
     this.element.crossOrigin = 'anonymous';
+    this.element.setAttribute('referrerpolicy', 'no-referrer');
     this.element.preload = 'auto';
     this.element.src = this.trackUrl(this.trackIndex);
 
     this.radioElement = new Audio();
     this.radioElement.crossOrigin = 'anonymous';
+    // Evita el envio de la cabecera Referer que causa el error 403 (anti-hotlinking) en servidores Icecast
+    this.radioElement.setAttribute('referrerpolicy', 'no-referrer');
+    (this.radioElement as any).referrerPolicy = 'no-referrer';
     this.radioElement.preload = 'none';
-    this.radioElement.src = RADIO_STATIONS[this.radioIndex].url;
+    this.radioElement.src = this.getStationUrl(this.radioIndex, this.serverIndex);
     this.currentLoadedRadioIndex = this.radioIndex;
 
-    // Resiliencia para despliegues estáticos (GitHub Pages):
-    // Si la URL del proxy local (/api/radio/...) falla por no haber backend Node,
-    // conmuta de inmediato al stream directo oficial de SomaFM.
+    // Resiliencia: si un servidor espejo de SomaFM falla o esta congestionado, rota al siguiente
     this.radioElement.addEventListener('error', () => {
-      const currentUrl = this.radioElement.src;
-      if (currentUrl.includes('/api/radio/')) {
-        const station = RADIO_STATIONS[this.radioIndex];
-        const key = station.name === 'Vaporwaves' ? 'vaporwaves' : station.name === 'Groove Salad' ? 'groovesalad' : 'defcon';
-        const directUrl = DIRECT_RADIO_STREAMS[key];
-        if (directUrl && this.radioElement.src !== directUrl) {
-          console.warn(`[Radio] Proxy local no disponible en hosting estático. Cambiando a stream HTTPS directo: ${directUrl}`);
-          this.radioElement.src = directUrl;
-          this.radioElement.load();
-        }
+      console.warn(`[Radio] Fallo en servidor ${RADIO_SERVERS[this.serverIndex]}. Conectando a servidor espejo alternativo...`);
+      this.serverIndex = (this.serverIndex + 1) % RADIO_SERVERS.length;
+      this.radioElement.src = this.getStationUrl(this.radioIndex, this.serverIndex);
+      this.radioElement.load();
+      if (this.isRadioPlaying) {
+        this.radioElement.play().catch(() => {});
       }
     });
 
     this.spectrum = new Uint8Array(USED_BINS);
+  }
+
+  private getStationUrl(stationIdx: number, srvIdx: number): string {
+    const station = RADIO_STATIONS[stationIdx];
+    return `${RADIO_SERVERS[srvIdx]}/${station.mount}`;
   }
 
   private trackUrl(index: number): string {
@@ -242,14 +247,22 @@ export class MusicAnalyser {
       }
       // Actualizar src de la estacion activa solo si cambio
       if (this.currentLoadedRadioIndex !== this.radioIndex) {
-        this.radioElement.src = RADIO_STATIONS[this.radioIndex].url;
+        this.radioElement.src = this.getStationUrl(this.radioIndex, this.serverIndex);
         this.radioElement.load();
         this.currentLoadedRadioIndex = this.radioIndex;
       }
       try {
         await this.radioElement.play();
       } catch (err) {
-        console.warn('[Radio] Error al reproducir stream:', err);
+        console.warn('[Radio] Error al reproducir stream, probando servidor alternativo:', err);
+        this.serverIndex = (this.serverIndex + 1) % RADIO_SERVERS.length;
+        this.radioElement.src = this.getStationUrl(this.radioIndex, this.serverIndex);
+        this.radioElement.load();
+        try {
+          await this.radioElement.play();
+        } catch (retryErr) {
+          console.warn('[Radio] Reintento fallido:', retryErr);
+        }
       }
     } else {
       this.radioElement.pause();
@@ -263,7 +276,7 @@ export class MusicAnalyser {
     const wasPlaying = this.isRadioPlaying;
     const count = RADIO_STATIONS.length;
     this.radioIndex = (this.radioIndex + step + count) % count;
-    this.radioElement.src = RADIO_STATIONS[this.radioIndex].url;
+    this.radioElement.src = this.getStationUrl(this.radioIndex, this.serverIndex);
     this.radioElement.load();
     this.currentLoadedRadioIndex = this.radioIndex;
 
@@ -275,7 +288,15 @@ export class MusicAnalyser {
       try {
         await this.radioElement.play();
       } catch (err) {
-        console.warn('[Radio] Error al cambiar estacion:', err);
+        console.warn('[Radio] Error al cambiar estacion, probando alternativo:', err);
+        this.serverIndex = (this.serverIndex + 1) % RADIO_SERVERS.length;
+        this.radioElement.src = this.getStationUrl(this.radioIndex, this.serverIndex);
+        this.radioElement.load();
+        try {
+          await this.radioElement.play();
+        } catch (retryErr) {
+          console.warn('[Radio] Reintento fallido:', retryErr);
+        }
       }
     }
 
