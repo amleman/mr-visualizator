@@ -24,21 +24,31 @@ export interface RadioStation {
   url: string;
 }
 
+export const DIRECT_RADIO_STREAMS: Record<string, string> = {
+  vaporwaves: 'https://ice2.somafm.com/vaporwaves-128-mp3',
+  groovesalad: 'https://ice2.somafm.com/groovesalad-128-mp3',
+  defcon: 'https://ice2.somafm.com/defcon-128-mp3',
+};
+
+// En desarrollo local (vite dev) se usa el proxy local (/api/radio/...) para evitar bloqueos por host local.
+// En producción estática (GitHub Pages) se usan directamente los streams HTTPS de SomaFM con CORS habilitado (*).
+const isDev = import.meta.env.DEV;
+
 export const RADIO_STATIONS: RadioStation[] = [
   {
     name: 'Vaporwaves',
     genre: 'Synthwave / Retro',
-    url: '/api/radio/vaporwaves',
+    url: isDev ? '/api/radio/vaporwaves' : DIRECT_RADIO_STREAMS.vaporwaves,
   },
   {
     name: 'Groove Salad',
     genre: 'Ambient / Lo-Fi',
-    url: '/api/radio/groovesalad',
+    url: isDev ? '/api/radio/groovesalad' : DIRECT_RADIO_STREAMS.groovesalad,
   },
   {
     name: 'DEF CON Radio',
     genre: 'Electronic / Beats',
-    url: '/api/radio/defcon',
+    url: isDev ? '/api/radio/defcon' : DIRECT_RADIO_STREAMS.defcon,
   },
 ];
 
@@ -83,6 +93,23 @@ export class MusicAnalyser {
     this.radioElement.preload = 'none';
     this.radioElement.src = RADIO_STATIONS[this.radioIndex].url;
     this.currentLoadedRadioIndex = this.radioIndex;
+
+    // Resiliencia para despliegues estáticos (GitHub Pages):
+    // Si la URL del proxy local (/api/radio/...) falla por no haber backend Node,
+    // conmuta de inmediato al stream directo oficial de SomaFM.
+    this.radioElement.addEventListener('error', () => {
+      const currentUrl = this.radioElement.src;
+      if (currentUrl.includes('/api/radio/')) {
+        const station = RADIO_STATIONS[this.radioIndex];
+        const key = station.name === 'Vaporwaves' ? 'vaporwaves' : station.name === 'Groove Salad' ? 'groovesalad' : 'defcon';
+        const directUrl = DIRECT_RADIO_STREAMS[key];
+        if (directUrl && this.radioElement.src !== directUrl) {
+          console.warn(`[Radio] Proxy local no disponible en hosting estático. Cambiando a stream HTTPS directo: ${directUrl}`);
+          this.radioElement.src = directUrl;
+          this.radioElement.load();
+        }
+      }
+    });
 
     this.spectrum = new Uint8Array(USED_BINS);
   }
